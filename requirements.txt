@@ -1,0 +1,19 @@
+# Python 3.11 — pinned to the versions verified in .venv
+# Core data stack
+pandas==2.2.3  # pinned to 2.2.x to match the Kaggle runtime
+numpy==2.4.6
+# Visualisation
+matplotlib==3.11.2
+seaborn==0.13.2
+missingno==0.5.2
+# Modelling
+scikit-learn==1.9.1
+scipy==1.17.1
+tensorflow==2.21.0
+# Explainability
+shap==0.51.0
+lime==0.2.0.1
+# Notebook execution
+jupyter==1.1.1
+nbconvert==7.17.2
+ipykernel==7.4.0

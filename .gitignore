@@ -1,0 +1,23 @@
+# Python / virtual env
+.venv/
+__pycache__/
+*.py[cod]
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Claude Code local settings
+.claude/
+
+# Kept locally, not published
+CLAUDE.md
+notes/
+scripts/
+docs/
+notebooks/_scratch*.ipynb

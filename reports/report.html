@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>F1 Podium Prediction — Analytical Report</title>
+<style>
+  @page { size: A4; margin: 17mm 16mm 18mm 16mm;
+          @bottom-center { content: counter(page); font: 9pt "Segoe UI", Arial, sans-serif; color: #666; } }
+  @page :first { @bottom-center { content: none; } }
+  :root { --ink: #1d2433; --muted: #5b6475; --accent: #b3122e; --rule: #d9dde5; --tint: #f4f6f9; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font: 10pt/1.42 "Segoe UI", Calibri, Arial, sans-serif; color: var(--ink); margin: 0; background: #fff; }
+  h1 { font-size: 17pt; margin: 0 0 8px; color: var(--ink); border-bottom: 2px solid var(--accent); padding-bottom: 4px; }
+  h2 { font-size: 12.5pt; margin: 16px 0 6px; color: var(--accent); }
+  h3 { font-size: 10.5pt; margin: 12px 0 4px; }
+  h1, h2, h3 { break-after: avoid; }
+  p { margin: 4px 0 7px; text-align: justify; }
+  ul, ol { margin: 3px 0 8px 0; padding-left: 18px; }
+  li { margin: 1.5px 0; }
+  section.chapter { break-before: page; }
+  table { border-collapse: collapse; width: 100%; margin: 6px 0 10px; font-size: 8.6pt; break-inside: avoid; }
+  th, td { border: 1px solid var(--rule); padding: 3px 5px; vertical-align: top; text-align: left; }
+  th { background: var(--tint); font-weight: 600; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  tr.best td { background: #fdf1f3; font-weight: 600; }
+  tr.ref td { color: var(--muted); }
+  figure { margin: 8px 0 12px; break-inside: avoid; text-align: center; }
+  figure img { max-width: 100%; max-height: 118mm; }
+  figure.half img { max-height: 82mm; }
+  figure.small img { max-height: 62mm; }
+  figcaption { font-size: 8.5pt; color: var(--muted); margin-top: 3px; text-align: left; }
+  figcaption b { color: var(--ink); }
+  .box { border-left: 4px solid var(--accent); background: var(--tint); padding: 6px 10px; margin: 8px 0 10px; break-inside: avoid; }
+  .box.neutral { border-left-color: #6b7a90; }
+  .box p { margin: 2px 0; }
+  .two { display: block; }
+  .two figure { margin: 6px 0 12px; }
+  .two figure img { max-height: 100mm; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 8.6pt; background: var(--tint); padding: 0 2px; }
+  .muted { color: var(--muted); }
+  /* title page */
+  .cover { height: 255mm; display: flex; flex-direction: column; }
+  .cover .kicker { font-size: 10pt; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); margin-top: 38mm; }
+  .cover h1 { font-size: 30pt; border: 0; margin: 6px 0 4px; padding: 0; }
+  .cover .sub { font-size: 13pt; color: var(--muted); margin-bottom: 18mm; }
+  .cover table { width: 70%; font-size: 10pt; }
+  .cover .links { margin-top: 10mm; font-size: 9.5pt; }
+  .cover .links div { margin: 3px 0; }
+  .cover .foot { margin-top: auto; font-size: 9pt; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 6px; }
+  .summary { margin-top: 12mm; }
+  .appendix figure img { max-height: 78mm; }
+  .appendix figure { margin: 4px 0 10px; }
+  a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<!-- ======================================================================= TITLE PAGE -->
+<div class="cover">
+  <div class="kicker">Milestone 1 · Analytical report</div>
+  <h1>F1 Podium Prediction</h1>
+  <div class="sub">Predicting podium finishes from information available after qualifying and before the race</div>
+  <table>
+    <tr><th>Team member</th><th>Student ID</th></tr>
+    <tr><td>Youssef Hesham Abdelhamid Helal</td><td>58-0552</td></tr>
+    <tr><td>Samer Ramzy</td><td>58-19523</td></tr>
+    <tr><td>Kerollos Mohsen</td><td>58-14434</td></tr>
+    <tr><td>Dyala Elsmery</td><td>58-21656</td></tr>
+  </table>
+  <div class="links">
+    <div><b>Kaggle notebook:</b> <a href="https://www.kaggle.com/code/youssefheshamhelal/f1-acl">kaggle.com/code/youssefheshamhelal/f1-acl</a></div>
+    <div><b>GitHub repository:</b> <a href="https://github.com/YoussefHeshamHelal/F1-Podium-Prediction">github.com/YoussefHeshamHelal/F1-Podium-Prediction</a></div>
+    <div><b>Data:</b> Formula 1 World Championship 1950–2024 (Kaggle / Ergast), 14 relational tables</div>
+  </div>
+  <div class="box summary">
+    <p><b>Summary.</b> We built a leakage-safe driver–race table of 24,755 rows (1950–2024), answered the three
+    data-engineering questions, engineered 38 pre-race features and trained four models.</p>
+    <ul>
+      <li><b>Split:</b> by season (train ≤ 2019, validation 2020–21, test 2022–24).</li>
+      <li><b>Best model:</b> the random forest, chosen on validation. On the unseen test seasons it reaches
+        <b>PR-AUC 0.714</b>, ROC-AUC 0.938 and F1 0.686, against 0.647 / 0.914 / 0.649 for the rule "the first three
+        on the grid finish on the podium".</li>
+      <li><b>What drives the predictions:</b> starting position and recent performance. Feature importance is not
+        causation (§7).</li>
+    </ul>
+  </div>
+  <div class="foot">DMET904 / CSEN 903 Advanced Computer Lab · German University in Cairo · Winter 2026 · 18 October 2026.
+  Every number in this report comes from the executed run-all notebook. Section references (§) point to the
+  notebook.</div>
+</div>
+
+<!-- ======================================================================= 1 -->
+<section class="chapter">
+<h1>1. Task, unit of analysis and prediction cutoff</h1>
+<p><b>Task.</b> For every driver entering a race, predict whether the driver finishes on the podium
+(<code>positionOrder ≤ 3</code>). This is binary classification. The <b>unit of analysis</b> is one driver in one
+race, so <code>(raceId, driverId)</code> is unique in the modeling table.</p>
+<p><b>Prediction cutoff:</b> after qualifying, before the start. The grid is fixed and the lights are not yet out.</p>
+<table>
+  <tr><th style="width:24%">Information</th><th>Status at the cutoff</th></tr>
+  <tr><td>Allowed (known before the start)</td><td>grid slot and pit-lane start; qualifying position; championship
+  standings <i>after the previous race</i>; form, reliability, ratings and history from <i>previous</i> races; circuit
+  and calendar facts</td></tr>
+  <tr><td>Leakage (never a feature)</td><td>this race's position / positionText / positionOrder, points, laps, time,
+  status, fastest lap, pit stops, lap times, and standings <i>after</i> this race</td></tr>
+</table>
+<p><b>How leakage is prevented in code.</b></p>
+<ul>
+  <li>Races are ordered by date, and every history feature is shifted by one race, so the current race is never
+  included.</li>
+  <li>Standings are taken from the previous race in the calendar. A season opener uses the previous season's final
+  table and is flagged.</li>
+  <li><b>Time-travel test (§4.5):</b> we recomputed the features for four races after deleting all later races and
+  blanking each race's own result. <b>0 of 3,510 values changed.</b></li>
+</ul>
+
+<!-- ======================================================================= 2 -->
+<h1 style="margin-top:14px">2. Data audit and cleaning</h1>
+<h2>2.1 Audit of the 14 raw tables (§1)</h2>
+<ul>
+  <li><b>Keys:</b> every primary key is unique and non-null, and all <b>23 foreign keys</b> reconcile (no
+  orphans).</li>
+  <li><b>The required grain is violated</b> by <b>85 driver-race pairs (176 rows)</b>, all from shared drives in the
+  1950s and a few later seasons.</li>
+  <li><b>Missing values:</b> the <code>\N</code> sentinel appears in 6 tables, and <code>qualifying.q2/q3</code> also
+  contains <b>empty strings</b>. Dates and lap or qualifying times are stored as text in several formats.</li>
+  <li><b>Qualifying-coverage drift (Figure 1):</b> qualifying coverage is 0 % of entries before 1994, 88–100 % in
+  1994–95, only 6–59 % in 1996–2002, and about 100 % from 2003. For most of history the grid is the only record of
+  the starting order.</li>
+  <li><b><code>grid = 0</code></b> on 1,638 rows, never a podium: mostly entries that did not (pre-)qualify, plus a
+  few genuine pit-lane starts.</li>
+  <li><b>The base rate tracks the field size,</b> at about 3 / entrants: 7.7–8.9 % in 1989–91, 15 % in 2022–24.</li>
+  <li><b>The Indianapolis 500</b> (1950–60, 11 races) is 18 % of the 1950–60 rows, and 103 of its 107 drivers never
+  raced elsewhere.</li>
+</ul>
+<figure class="half"><img src="../outputs/figures/s1_table_coverage_qualifying_drift.png">
+<figcaption><b>Figure 1.</b> Share of result rows with a matching row in each table, per season. Qualifying exists only
+from 1994 and is patchy until 2002 (§1.8.2).</figcaption></figure>
+
+<h2>2.2 Cleaning decisions (§2)</h2>
+<table>
+  <tr><th style="width:30%">Decision</th><th>Justification</th></tr>
+  <tr><td>Strip whitespace; <code>\N</code> and <code>''</code> → NaN; a column becomes numeric only if every value
+  parses</td><td>Both placeholders exist. The rule avoids silently turning codes such as "R"/"D" into NaN.</td></tr>
+  <tr><td>Dates → datetime; every duration (race time, gaps, lap and qualifying times such as "1:26.572") → seconds,
+  with one parser</td><td>Several text formats. Verified against the <code>milliseconds</code> column.</td></tr>
+  <tr><td><b>Duplicate rule:</b> keep the row where the driver started the car (<code>grid &gt; 0</code>), then the
+  most laps, then the lowest <code>resultId</code></td><td>Keeps the driver's main drive, judged by how much he
+  drove, not by how well the car finished. "Most laps" decided 82 of the 85 pairs. The rule agrees with "best
+  finish" in all 85, so no labels change. <b>91 rows removed</b>; flags <code>shared_car</code> and
+  <code>n_cars_driven</code> added.</td></tr>
+  <tr><td>Exclude the Indy 500 (11 races, 381 rows)</td><td>A separate oval competition entered by specialists. It
+  distorts the home-race and experience features.</td></tr>
+  <tr><td>Drop entries with no grid slot (did not qualify / pre-qualify, withdrew before the grid): 1,532 rows,
+  0 podiums</td><td>Their outcome is known before the race, so they are not real predictions. Pit-lane starters and
+  "Withdrew" entries with a grid slot are <b>kept</b>, since dropping them would use post-cutoff
+  information.</td></tr>
+  <tr><td>139 status values → finished / mechanical / accident-driver / other</td><td>Needed for Q3 and the
+  reliability features. "Mechanical" means a named car component failed, the brief's definition.</td></tr>
+  <tr><td>Qualifying: only the impossible lap removed (16:42.6, more than 2× the session best); laps above 107 %
+  <i>flagged</i>, not deleted</td><td>The ratio distribution is continuous up to 1.45×, then one value at 10.2×.
+  Slow laps are real (wet sessions, car problems).</td></tr>
+  <tr><td>Team lineage across renames (167 constructor IDs → 112 lineages); nationality → country map</td><td>Team
+  form should not reset at a rename (e.g. Brawn → Mercedes). The country map makes the home-race comparison
+  possible.</td></tr>
+  <tr><td>Outliers (1.5 × IQR) checked and <b>kept</b></td><td>The flagged values are real: long circuits (Spa has 97
+  of the 130 qualifying-time outliers), wet sessions, a 34-car grid in 1953, and zero-inflated points
+  (Appendix&nbsp;A).</td></tr>
+</table>
+<p><b>Result:</b> results 26,759 → 26,668 (dedup) → 26,287 (Indy 500) → <b>24,755 rows</b> (non-starters), 1,114
+races.</p>
+<ul>
+  <li>The podium rate rises from 12.7 % to 13.6 %, because only negatives were removed.</li>
+  <li>The table has 0 duplicate keys and 0 placeholder cells, and every race still has positions 1–3.</li>
+</ul>
+<div class="two">
+<figure><img src="../outputs/figures/s2_cleaning_funnel.png"><figcaption><b>Figure 2.</b> Rows removed at each
+cleaning step (§2.13.1).</figcaption></figure>
+<figure><img src="../outputs/figures/s2_before_after.png"><figcaption><b>Figure 3.</b> Before vs after cleaning: the
+<code>grid = 0</code> spike disappears and the podium rate per season rises slightly (§2.13).</figcaption></figure>
+</div>
+</section>
+
+<!-- ======================================================================= 3 -->
+<section class="chapter">
+<h1>3. Data-engineering questions</h1>
+<p>Every answer uses multi-hop joins, and every rate carries a Wilson 95 % confidence interval.</p>
+
+<h2>Q1. Which circuits convert a front-row start into a podium most often, and does that change after 2014?</h2>
+<p class="muted">Joins: results ⋈ races ⋈ circuits ⋈ qualifying. Eras: 2003–2013 vs the hybrid era 2014–2024
+(qualifying is complete from 2003). A circuit needs at least 10 front-row starts per era.</p>
+<div class="box">
+<p><b>Answer.</b> Overall, a front-row start (grid P1–P2) converts <b>68 % → 76 %</b> from 2003–13 to 2014–24
+(by qualifying position: 67 % → 74 %).</p>
+<ul>
+  <li><b>Top circuits after 2014:</b> <b>Suzuka 89 %, Abu Dhabi 86 %, Monaco 85 %</b>. The lowest is Budapest
+  (59 %).</li>
+  <li><b>The ranking reshuffled:</b> Spearman ρ = 0.21 (p = 0.47) over the 14 circuits with enough data in both eras.
+  Abu Dhabi went from last to second; Monaco is high in both eras.</li>
+</ul>
+</div>
+<p><b>Qualifying position vs grid position.</b> The circuit rankings by the two definitions are almost identical
+(ρ = 0.91 / 0.84). Where they differ, the grid matters:</p>
+<ul>
+  <li>front-row qualifiers who started further back after a penalty converted only <b>22 % / 31 %</b>;</li>
+  <li>drivers promoted onto the front row converted 56 % / 67 %;</li>
+  <li>such cases tripled after 2014 (9 → 29), mostly engine-part penalties.</li>
+</ul>
+<p><b>Grain / missingness / cutoff.</b> One front-row starter per race (2 per race, 428 races). Qualifying is missing
+for 0.3 % of these rows. Grid and qualifying are both known before the start.</p>
+<p><b>Caveat:</b> per-circuit intervals are ±15–25 points, so the robust findings are the overall rise and the
+reshuffle.</p>
+<div class="two">
+<figure><img src="../outputs/figures/s3_q1_front_row_conversion.png"><figcaption><b>Figure 4.</b> Front-row
+conversion rate per circuit, before vs after 2014, with Wilson 95 % CIs (§3.1).</figcaption></figure>
+<figure><img src="../outputs/figures/s3_q1_grid_vs_qualifying.png"><figcaption><b>Figure 5.</b> Grid vs qualifying
+definition of "front row", including penalised and promoted drivers (§3.1).</figcaption></figure>
+</div>
+
+<h2>Q2. Do drivers finish on the podium more often at home, controlling for starting position?</h2>
+<p class="muted">Joins: results ⋈ drivers (nationality → country) and results ⋈ races ⋈ circuits (circuit country).
+Comparison within grid bands P1, P2–3, P4–6, P7–10, P11+.</p>
+<div class="box">
+<p><b>Answer: no evidence of a home advantage.</b></p>
+<ul>
+  <li><b>Raw comparison (confounded):</b> home 11.9 % vs away 13.8 %. Home drivers start further back on average
+  (grid 12.7 vs 11.7).</li>
+  <li><b>Within the same grid band:</b> Mantel–Haenszel odds ratio <b>0.95 [0.80–1.13]</b>, 10,000-permutation
+  <b>p = 0.56</b>.</li>
+  <li><b>Training seasons only (2003–2019):</b> OR 0.71 [0.45–1.12], p = 0.13.</li>
+</ul>
+</div>
+<p><b>Grain / missingness / cutoff.</b> One starter with a grid slot per race. Driver and circuit country are complete
+after the mapping (0 missing). "Home" and grid are both known before the start.</p>
+<p><b>Limitation:</b> with only 20 home pole starts in 2003–19, a small effect cannot be ruled out.</p>
+<figure class="half"><img src="../outputs/figures/s3_q2_home_advantage.png"><figcaption><b>Figure 6.</b> Home vs away
+podium rate within grid bands, with the stratified odds ratio (§3.2).</figcaption></figure>
+
+<h2>Q3. Which constructors have the highest mechanical-retirement rate, 2014–2021 vs 2022–2024?</h2>
+<p class="muted">Joins: results ⋈ status ⋈ constructors (team lineage) ⋈ races. Mechanical = a car component failed;
+crashes, driver errors and regulation decisions are excluded. A team needs at least 40 starts per era.</p>
+<div class="box">
+<p><b>Answer.</b> Mechanical failures ended <b>9.9 %</b> of starts in 2014–21 and <b>6.1 %</b> in 2022–24
+(χ² p ≈ 5·10⁻⁵).</p>
+<ul>
+  <li><b>2014–21:</b> highest were <b>Alpine lineage (Lotus F1 / Renault) 15.0 %, RB lineage (Toro Rosso /
+  AlphaTauri) 14.7 %, McLaren 14.4 %</b>. <b>Mercedes</b> was lowest at 4.1 %.</li>
+  <li><b>2022–24:</b> highest were <b>Alpine 11.0 %, Sauber 8.8 %</b>, RB and Ferrari 6.6 %. <b>McLaren and Red
+  Bull</b> were lowest at 3.7 %.</li>
+  <li>Alpine is the least reliable team in both eras; McLaren, RB and Red Bull improved most.</li>
+</ul>
+</div>
+<p><b>Robustness:</b> a strict definition (without tyre / wheel / wing statuses) gives the same ranking (ρ = 0.97 /
+1.00).</p>
+<p><b>Grain / missingness / cutoff.</b> One race start per row (4,623 starts), status complete. Status is post-race
+information, used here descriptively only. Past reliability is a feature; the current race's status never is.</p>
+<figure class="half"><img src="../outputs/figures/s3_q3_mechanical_rate.png"><figcaption><b>Figure 7.</b> Mechanical-retirement rate per team lineage, 2014–21 vs 2022–24, with Wilson 95 % CIs (§3.3).</figcaption></figure>
+</section>
+
+<!-- ======================================================================= 4 -->
+<section class="chapter">
+<h1>4. Selected features and why each is valid at the pre-race cutoff</h1>
+<p><b>38 numeric features in 10 groups.</b></p>
+<ul>
+  <li><b>"Past"</b> always means races that finished before this one (date-ordered, current race excluded).</li>
+  <li><b>Form</b> uses an exponentially weighted mean with a half-life of 5 races. It beat fixed windows of 3, 5 and
+  10 races on all six form features (§4.2).</li>
+</ul>
+<table>
+  <tr><th style="width:12%">Group</th><th style="width:24%">Feature(s)</th><th>Meaning</th><th style="width:27%">Why it is known before the start</th></tr>
+  <tr><td>Grid</td><td><code>grid_f</code>, <code>pit_lane_start</code></td><td>starting slot (pit lane = behind the last slot); pit-lane flag</td><td>the grid is fixed before the lights go out</td></tr>
+  <tr><td>Qualifying</td><td><code>quali_pos_d</code>, <code>grid_penalty_d</code>, <code>quali_source</code></td><td>qualifying position (derived from the grid where no qualifying row exists); grid − qualifying (penalties); 1 = derived</td><td>qualifying ends before the race; penalties are applied to the grid</td></tr>
+  <tr><td>Standings</td><td><code>drv_champ_pos</code>, <code>drv_points_share</code>, <code>drv_wins</code>, <code>con_champ_pos</code>, <code>con_points_share</code>, <code>season_opener</code></td><td>driver / constructor championship position, points as a share of the leader's, wins so far; opener flag</td><td>official standings after the <i>previous</i> race; an opener uses last season's final table</td></tr>
+  <tr><td>Driver form</td><td><code>drv_form_podium</code>, <code>drv_form_finish</code>, <code>drv_form_dnf</code>, <code>drv_form_n</code></td><td>past podium rate, mean finish, DNF rate (weighted); number of past races</td><td>previous races only (shift by one race)</td></tr>
+  <tr><td>Constructor form</td><td><code>con_form_podium</code>, <code>con_form_best</code>, <code>con_form_mech</code></td><td>team podium rate, best finish of the team's cars, mechanical-failure rate (team lineage)</td><td>previous races only</td></tr>
+  <tr><td>Experience</td><td><code>drv_starts</code>, <code>drv_age</code>, <code>rookie_season</code>, <code>team_starts</code></td><td>previous starts; age on race day; first-season flag; previous starts of the team</td><td>counts of earlier races; date of birth is static</td></tr>
+  <tr><td>Circuit history</td><td><code>drv_circuit_starts</code>, <code>drv_circuit_podium</code>, <code>team_circuit_podium</code></td><td>previous starts / podium rate of the driver and the team at this circuit</td><td>previous visits only</td></tr>
+  <tr><td>Ratings</td><td><code>drv_elo</code>, <code>team_elo</code></td><td>pairwise Elo ratings (K = 32, 20 % pull to the mean each season)</td><td>read before the race; updated only after it</td></tr>
+  <tr><td>Race context</td><td><code>drv_form_podium_rank</code>, <code>drv_form_finish_rank</code>, <code>con_form_podium_rank</code>, <code>drv_elo_rank</code>, <code>team_elo_rank</code></td><td>rank of the driver's form / Elo among today's starters</td><td>ranks of pre-race features within the known starting field</td></tr>
+  <tr><td>Race context</td><td><code>strong_cars_ahead</code></td><td>how many of the field's 3 highest-Elo drivers start ahead on the grid</td><td>grid + pre-race Elo</td></tr>
+  <tr><td>Race context</td><td><code>circuit_grid_prior</code>, <code>circuit_overtaking</code></td><td>past podium rate of this grid slot at this circuit (shrunk towards the overall slot rate); past mean |grid − finish| at the circuit</td><td>previous races only</td></tr>
+  <tr><td>Era</td><td><code>field_size</code>, <code>season</code>, <code>years_since_reg_change</code></td><td>number of starters; season; years since the last major rules change</td><td>calendar and entry list are known when the grid is set</td></tr>
+</table>
+<p><b>Encoding.</b> All 38 features are numeric (positions, counts, rates, ranks, ratings, 0/1 flags), so no label or
+one-hot encoding is needed. Categorical sources (driver, team, circuit, nationality, status) become the pre-race
+summaries above. We avoided identity columns for three reasons:</p>
+<ul>
+  <li>they would let the models memorise names instead of learning signals that carry over to new seasons;</li>
+  <li>teams that are new in the test seasons would have no column;</li>
+  <li>they would add about 1,000 sparse columns.</li>
+</ul>
+<p><b>Evidence (training seasons only).</b></p>
+<ul>
+  <li><b>Strongest single features:</b> qualifying position, grid, circuit grid prior, form, standings and Elo
+  (ROC-AUC 0.89–0.91).</li>
+  <li><b>No single feature exceeds 0.91,</b> so there is no leakage signal.</li>
+  <li><b>Weak features (ROC-AUC 0.50–0.59)</b> are kept as modifiers.</li>
+</ul>
+<p><b>Tested and rejected:</b></p>
+<ul>
+  <li><b>past pit-stop performance:</b> PR-AUC −0.024;</li>
+  <li><b>qualifying lap-time gaps on top of position:</b> −0.0002 / −0.0037, CIs include 0;</li>
+  <li><b>sprint results:</b> no sprint weekends in training, and already reflected in the grid (2021–22) and the
+  standings;</li>
+  <li><b>near-duplicates:</b> ρ = 0.99;</li>
+  <li><b><code>home_race</code>:</b> no effect in Q2 and no gain in the ablation.</li>
+</ul>
+<div class="two">
+<figure><img src="../outputs/figures/s4_feature_auc.png"><figcaption><b>Figure 8.</b> Single-feature ROC-AUC on the
+training seasons 2003–19 (§4.6).</figcaption></figure>
+<figure><img src="../outputs/figures/s4_form_window_experiment.png"><figcaption><b>Figure 9.</b> Form-window
+experiment: N = 3 / 5 / 10 vs exponential weighting (§4.2).</figcaption></figure>
+</div>
+
+<!-- ======================================================================= 5 -->
+<h1 style="margin-top:12px">5. Split, training data and preprocessing</h1>
+<table>
+  <tr><th>Split</th><th>Seasons</th><th class="num">Races</th><th class="num">Rows</th><th class="num">Podium rate</th><th>Role</th></tr>
+  <tr><td>Train</td><td>1950–2019</td><td class="num">1,007</td><td class="num">22,618</td><td class="num">13.4 %</td><td>fit models (recency-weighted)</td></tr>
+  <tr><td>Validation</td><td>2020–2021</td><td class="num">39</td><td class="num">780</td><td class="num">15.0 %</td><td>every choice: hyperparameters, threshold, preprocessing</td></tr>
+  <tr><td>Test</td><td>2022–2024</td><td class="num">68</td><td class="num">1,357</td><td class="num">15.0 %</td><td>scored once at the end (new rules era)</td></tr>
+</table>
+<ul>
+  <li><b>Why split by season?</b> Deployment predicts future races from past ones. Rows of one race share conditions,
+  so a random split would mix the same race across splits. A random-row split showed no inflation (0.620 vs 0.634),
+  consistent with leakage-safe features.</li>
+  <li><b>Training window:</b> all seasons are kept, with recency weights 0.5^((2019 − season)/5). They beat
+  2003–19-only training (validation PR-AUC ≈ 0.72 vs 0.70).</li>
+  <li><b>Qualifying for the early seasons:</b> qualifying position is derived from the grid where no qualifying row
+  exists. This is exact for 98.2 % of 1994–2002 drivers, and every derived value is flagged.</li>
+</ul>
+<p><b>Preprocessing-order experiments</b> (validation PR-AUC, Figure 10):</p>
+<ul>
+  <li><b>(A)</b> Fitting the imputer and scaler on all rows vs training rows only changed PR-AUC by −0.001 (CI
+  includes 0). But the evaluation seasons moved the training means by up to 15 %, so the preprocessing is fitted on
+  training rows only, inside each pipeline.</li>
+  <li><b>(B)</b> A circuit grid prior computed from all seasons, including the podiums being predicted, gave
+  <b>+0.035</b> for logistic regression (CI [+0.006, +0.060]). This is target leakage that inflates the score, so the
+  prior uses past races only.</li>
+  <li><b>(C)</b> Missing-value handling: median + flags for LR / NN; native NaN for the trees (0.726 vs 0.710 for
+  imputed boosting).</li>
+</ul>
+<p><b>Missing values.</b> They are "no history yet" (debuts, first visits, the seasons before the constructors'
+championship existed). The rows are kept: missingness itself is informative (debut podium rate 2.5 % vs 13.8 %), and
+dropping the incomplete training rows changed PR-AUC by +0.0007 (CI [−0.018, +0.021]).</p>
+<div class="two">
+<figure><img src="../outputs/figures/s5_preprocessing_experiments.png"><figcaption><b>Figure 10.</b> Preprocessing-order experiments A–C (§5.6).</figcaption></figure>
+<figure><img src="../outputs/figures/s5_preprocessing_effect.png"><figcaption><b>Figure 11.</b> Effect of median
+filling and scaling on four features. Test rows keep their drift, e.g. <code>team_starts</code> at +1.95 SD
+(§5.7.1).</figcaption></figure>
+</div>
+</section>
+
+<!-- ======================================================================= 6 -->
+<section class="chapter">
+<h1>6. Models and evaluation</h1>
+<h2>6.1 Models (same table, same 38 features, same rows)</h2>
+<ul>
+  <li><b>Logistic regression (baseline):</b> a weighted sum of the scaled features through a sigmoid, with an L2
+  penalty. Simple and stable; additive in the log-odds.</li>
+  <li><b>Random forest:</b> 300 decision trees on bootstrap samples, with random feature subsets at each split; their
+  votes are averaged. Captures thresholds and interactions; handles NaN natively.</li>
+  <li><b>Gradient boosting</b> (<code>HistGradientBoostingClassifier</code>): small trees added one after another,
+  each correcting the remaining error. Usually the strongest tree model on tables.</li>
+  <li><b>Shallow neural network</b> (Keras): 1–2 hidden ReLU layers and a sigmoid output, trained with Adam on
+  binary cross-entropy, with early stopping on validation PR-AUC.</li>
+</ul>
+<h2>6.2 Metrics</h2>
+<ul>
+  <li><b>Primary: PR-AUC.</b> Podiums are rare (15 %), and PR-AUC measures how well the podium finishers are ranked
+  at the top. No skill scores 0.15.</li>
+  <li><b>Why not ROC-AUC?</b> It rewards ranking the easy back-of-grid cases: the one-feature grid rule already
+  reaches 0.91.</li>
+  <li><b>Secondary: F1</b> at the threshold that maximises F1 on validation, because a podium call is a yes/no
+  decision.</li>
+  <li><b>Also reported:</b> ROC-AUC, precision, recall, accuracy and the top-3 hit rate (the share of each race's three
+  highest-scored drivers who actually finished on the podium).</li>
+  <li><b>Accuracy is not used for decisions.</b> "Always no podium" is already 85 % accurate.</li>
+</ul>
+<h2>6.3 Three modeling attempts (validation PR-AUC)</h2>
+<table>
+  <tr><th>Attempt</th><th class="num">LR</th><th class="num">RF</th><th class="num">GB</th><th class="num">NN</th><th>Finding</th></tr>
+  <tr><td>1 · Library defaults</td><td class="num">0.718</td><td class="num">0.670</td><td class="num">0.696</td><td class="num">0.724</td><td>default RF and GB memorise the data (train 2015–19 PR-AUC = 1.000)</td></tr>
+  <tr><td>2 · Tuned on validation (18 / 64 / 224 / 20 configurations)</td><td class="num">0.723</td><td class="num"><b>0.745</b></td><td class="num">0.742</td><td class="num">0.738</td><td>regularising the trees is the only significant gain: RF +0.075 [+0.035, +0.100], GB +0.046 [+0.007, +0.077]</td></tr>
+  <tr><td>3 · Race-wise normalisation / ensemble</td><td class="num">0.704</td><td class="num">0.724</td><td class="num">0.712</td><td class="num">0.724</td><td>rejected: −0.014 to −0.030; ensemble 0.739 &lt; RF</td></tr>
+</table>
+<p><b>Chosen settings:</b></p>
+<ul>
+  <li><b>LR:</b> C = 0.003.</li>
+  <li><b>RF:</b> max depth 6, at least 50 rows per leaf.</li>
+  <li><b>GB:</b> learning rate 0.03, 8 leaves, at least 100 rows per leaf, 100 trees.</li>
+  <li><b>NN:</b> one layer of 16 units, with class weights.</li>
+</ul>
+<p><b>Thresholds</b> (max F1 on validation, frozen): 0.32 / 0.34 / 0.36 / 0.79.</p>
+<p><b>Early stopping:</b> without it, the NN's train − validation gap doubles (0.048 → 0.101) and validation PR-AUC
+falls from 0.738 to 0.722 (Figure 15).</p>
+<h2>6.4 Results on train, validation and the unseen test set</h2>
+<table>
+  <tr><th>Model</th><th>Split</th><th class="num">ROC-AUC</th><th class="num">PR-AUC</th><th class="num">F1</th><th class="num">Precision</th><th class="num">Recall</th><th class="num">Accuracy</th><th class="num">Top-3 hit</th></tr>
+  <tr><td rowspan="3">Logistic regression</td><td>train</td><td class="num">0.899</td><td class="num">0.566</td><td class="num">0.556</td><td class="num">0.564</td><td class="num">0.548</td><td class="num">0.882</td><td class="num">0.550</td></tr>
+  <tr><td>validation</td><td class="num">0.927</td><td class="num">0.723</td><td class="num">0.700</td><td class="num">0.692</td><td class="num">0.709</td><td class="num">0.909</td><td class="num">0.692</td></tr>
+  <tr><td>test</td><td class="num">0.935</td><td class="num">0.707</td><td class="num">0.667</td><td class="num">0.606</td><td class="num">0.740</td><td class="num">0.889</td><td class="num">0.637</td></tr>
+  <tr><td rowspan="3"><b>Random forest (selected)</b></td><td>train</td><td class="num">0.905</td><td class="num">0.600</td><td class="num">0.589</td><td class="num">0.556</td><td class="num">0.626</td><td class="num">0.882</td><td class="num">0.567</td></tr>
+  <tr><td>validation</td><td class="num">0.931</td><td class="num">0.745</td><td class="num">0.716</td><td class="num">0.690</td><td class="num">0.744</td><td class="num">0.912</td><td class="num">0.701</td></tr>
+  <tr class="best"><td>test</td><td class="num">0.938</td><td class="num">0.714</td><td class="num">0.686</td><td class="num">0.622</td><td class="num">0.765</td><td class="num">0.895</td><td class="num">0.642</td></tr>
+  <tr><td rowspan="3">Gradient boosting</td><td>train</td><td class="num">0.904</td><td class="num">0.593</td><td class="num">0.579</td><td class="num">0.566</td><td class="num">0.592</td><td class="num">0.884</td><td class="num">0.561</td></tr>
+  <tr><td>validation</td><td class="num">0.933</td><td class="num">0.742</td><td class="num">0.709</td><td class="num">0.709</td><td class="num">0.709</td><td class="num">0.913</td><td class="num">0.684</td></tr>
+  <tr><td>test</td><td class="num">0.938</td><td class="num">0.718</td><td class="num">0.677</td><td class="num">0.643</td><td class="num">0.716</td><td class="num">0.898</td><td class="num">0.642</td></tr>
+  <tr><td rowspan="3">Neural network</td><td>train</td><td class="num">0.885</td><td class="num">0.456</td><td class="num">0.552</td><td class="num">0.470</td><td class="num">0.667</td><td class="num">0.854</td><td class="num">0.531</td></tr>
+  <tr><td>validation</td><td class="num">0.927</td><td class="num">0.738</td><td class="num">0.708</td><td class="num">0.734</td><td class="num">0.684</td><td class="num">0.915</td><td class="num">0.701</td></tr>
+  <tr><td>test</td><td class="num">0.934</td><td class="num">0.694</td><td class="num">0.624</td><td class="num">0.630</td><td class="num">0.618</td><td class="num">0.888</td><td class="num">0.632</td></tr>
+  <tr class="ref"><td>Grid rule (P1–P3)</td><td>test</td><td class="num">0.914</td><td class="num">0.647</td><td class="num">0.649</td><td class="num">0.650</td><td class="num">0.647</td><td class="num">0.895</td><td class="num">0.652</td></tr>
+  <tr class="ref"><td>Always "no podium"</td><td>test</td><td class="num">0.500</td><td class="num">0.150</td><td class="num">0.000</td><td class="num">0.000</td><td class="num">0.000</td><td class="num">0.850</td><td class="num">0.150</td></tr>
+</table>
+<p class="muted" style="font-size:8.5pt">Train = all 1950–2019 rows, unweighted. These scores are lower than
+validation because early eras are harder to predict. The overfitting check (train 2015–19 vs validation) is in
+§6.7 of the notebook.</p>
+<ul>
+  <li><b>Every model beats the grid rule on PR-AUC:</b> RF +0.067 [+0.023, +0.107], GB +0.070, LR +0.059; the NN
+  only just (+0.046 [−0.001, +0.090]).</li>
+  <li><b>No model beats logistic regression significantly</b> (CIs include 0). The signal is mostly monotone and
+  additive.</li>
+  <li><b>Picking exactly 3 per race,</b> the models match the grid rule rather than beat it (top-3 hit rate −0.010 to
+  −0.020, CIs include 0). The value is calibrated confidence across races.</li>
+  <li><b>Hardest season: 2024.</b> LR and the NN fall below the grid rule after McLaren's mid-season rise.</li>
+  <li><b>Calibration:</b> LR, RF and GB are well calibrated (Brier 0.069–0.072). The class-weighted NN over-predicts
+  (0.100).</li>
+</ul>
+<div class="two">
+<figure><img src="../outputs/figures/s6_roc_pr_curves.png"><figcaption><b>Figure 12.</b> ROC and precision–recall
+curves, validation and test, against the grid rule and no skill (§6.7).</figcaption></figure>
+<figure><img src="../outputs/figures/s6_confusion_matrices.png"><figcaption><b>Figure 13.</b> Confusion matrices at the
+frozen validation thresholds (§6.7).</figcaption></figure>
+</div>
+<div class="two">
+<figure><img src="../outputs/figures/s6_nn_curves_calibration.png"><figcaption><b>Figure 14.</b> NN training curves
+(loss and exact PR-AUC per epoch) and calibration on test (§6.7).</figcaption></figure>
+<figure><img src="../outputs/figures/s6_nn_early_stopping.png"><figcaption><b>Figure 15.</b> The same NN with vs
+without early stopping (§6.4.1).</figcaption></figure>
+</div>
+<figure class="small"><img src="../outputs/figures/s6_attempts.png"><figcaption><b>Figure 16.</b> Validation PR-AUC per
+modeling attempt and model (§6.5).</figcaption></figure>
+<h2>6.5 Limitations of each model</h2>
+<ul>
+  <li><b>LR:</b> additive in the log-odds; the correlated features (standings, form, Elo) need strong shrinkage, so
+  individual coefficients are unstable; it extrapolates linearly beyond the training range.</li>
+  <li><b>RF:</b> memorises unless the trees are kept shallow; cannot extrapolate beyond training values
+  (<code>season</code>, <code>team_starts</code>); its built-in importances are biased, which is why we use
+  permutation importance and SHAP.</li>
+  <li><b>GB:</b> sensitive to the number of trees, chosen on only 39 races from 224 configurations; same extrapolation
+  limit as the RF.</li>
+  <li><b>NN:</b> least stable across settings and seeds; uses validation twice (early stopping and configuration),
+  with the largest validation → test drop; miscalibrated by class weights; a black box.</li>
+</ul>
+</section>
+
+<!-- ======================================================================= 7 -->
+<section>
+<h1 style="margin-top:14px">7. Feature-group ablation and explainability</h1>
+<h2>7.1 Feature-group ablation (§7.1)</h2>
+<p>Each variant is refitted with the frozen settings, without one group (or with only one group).</p>
+<ul>
+  <li><b>No single group is essential:</b> every change in RF PR-AUC is under ±0.012, and almost every CI includes
+  0. The groups overlap; for example, starting position is also encoded in <code>circuit_grid_prior</code>.</li>
+  <li><b>Removing whole blocks costs more:</b> grid + qualifying together −0.016 on validation; all past-performance
+  groups −0.013.</li>
+  <li><b>Race context alone (8 features) matches all 38:</b> test 0.715 vs 0.714.</li>
+  <li><b>Circuit history <i>hurts</i> on test:</b> +0.011 [+0.001, +0.022] without it. It does not carry over into the
+  2022 rules era. The model was not changed, because the test set must not drive feature selection.</li>
+  <li><b><code>home_race</code></b> adds nothing (−0.001 / −0.003).</li>
+</ul>
+<figure class="half"><img src="../outputs/figures/s7_ablation.png"><figcaption><b>Figure 17.</b> Random forest: remove
+a group (left) or use one group only (right), validation and test (§7.1).</figcaption></figure>
+<h2>7.2 Global explanations: permutation importance and SHAP (§7.2–7.3)</h2>
+<ul>
+  <li><b>Permutation importance on the test seasons:</b> the RF relies on <code>circuit_grid_prior</code> (−0.027
+  PR-AUC when shuffled), <code>grid_f</code> (−0.021) and <code>quali_pos_d</code> (−0.013). Every other feature
+  costs under 0.003, because a substitute carries its information.</li>
+  <li><b>Grouped permutation:</b> race context 0.067 &gt; standings 0.027 &gt; grid 0.019 &gt; qualifying 0.009.
+  Shuffling a whole group is needed because correlated features split their importance.</li>
+  <li><b>SHAP</b> (exact TreeExplainer; additivity error about 1e-15, also on rows with NaN): share of the total effect
+  — race context 29 %, standings 19 %, grid 13 %, driver form 13 %, qualifying 12 %, constructor form 8 %, ratings 4 %.</li>
+  <li><b>The grid effect is a step:</b> P1–P3 add +0.08 to +0.11 to the probability, P4 about +0.035, P5 and further
+  back −0.02 to −0.05.</li>
+  <li><b>The out-of-range features</b> (<code>season</code>, <code>team_starts</code>) contribute under 0.01.</li>
+  <li><b>Logistic-regression coefficients</b> (the intrinsically interpretable model): <code>circuit_grid_prior</code>
+  +0.26, <code>strong_cars_ahead</code> −0.20, grid −0.16, qualifying −0.16 log-odds per SD. Every sign makes racing
+  sense, and the ranking agrees with RF SHAP (Spearman ρ = 0.88).</li>
+</ul>
+<div class="two">
+<figure><img src="../outputs/figures/s7_permutation_importance.png"><figcaption><b>Figure 18.</b> Permutation
+importance: top 15 features and grouped, RF vs LR (§7.2).</figcaption></figure>
+<figure><img src="../outputs/figures/s7_shap_beeswarm.png"><figcaption><b>Figure 19.</b> SHAP beeswarm, random forest,
+test seasons 2022–24 (§7.3).</figcaption></figure>
+</div>
+<figure class="small"><img src="../outputs/figures/s7_lr_coefficients.png"><figcaption><b>Figure 20.</b> Logistic
+regression: 15 largest standardised coefficients (§7.3.1).</figcaption></figure>
+<h2>7.3 Local explanation: one driver in one race (§7.4)</h2>
+<p><b>Row chosen by a fixed rule:</b> the highest-probability test driver who started P4 or lower and did finish on
+the podium. That is <b>Max Verstappen, 2024 British GP</b>, who started P4 and finished P2. The model gave him
+<b>p = 0.544</b>, a podium call; the grid rule would have missed him.</p>
+<ul>
+  <li><b>SHAP waterfall, from the average 0.141:</b> recent podium form +0.07, the historical podium rate of P4 at
+  Silverstone +0.04, team leading the constructors' championship +0.03, himself leading the drivers' championship
+  +0.03.</li>
+  <li><b>LIME</b> (local fit R² 0.77) agrees on 9 of the top 10 features, all with the same direction.</li>
+</ul>
+<div class="two">
+<figure><img src="../outputs/figures/s7_shap_waterfall.png"><figcaption><b>Figure 21.</b> SHAP waterfall for the
+selected prediction (§7.4).</figcaption></figure>
+<figure><img src="../outputs/figures/s7_lime.png"><figcaption><b>Figure 22.</b> LIME explanation of the same
+prediction (§7.4).</figcaption></figure>
+</div>
+<div class="box">
+<p><b>Importance is not causation.</b> These methods explain <i>the model</i>, not Formula 1. A feature being
+important means the model relies on it to predict, not that it causes podium finishes.</p>
+<ul>
+  <li><b>Proxies:</b> team Elo and points stand in for car speed, which the dataset does not measure. Raising a
+  team's Elo would not make its car faster.</li>
+  <li><b>Shared credit:</b> correlated position features split the credit arbitrarily.</li>
+  <li><b>Common cause:</b> a good grid slot and a podium both come from the same fast car and driver.</li>
+  <li><b>Limited range:</b> beyond the training range, the trees only repeat their last value.</li>
+</ul>
+</div>
+<p><b>Fairness.</b></p>
+<ul>
+  <li>No identity or nationality feature is used, and <code>home_race</code> was tested and dropped.</li>
+  <li>Age carries 0.3 % of the SHAP weight.</li>
+  <li>Rookies receive low probabilities because they have no history, not because of who they are.</li>
+  <li>The model inherits F1's dependence on established top teams, so it recognises a rising team only after its
+  results arrive.</li>
+</ul>
+
+<!-- ======================================================================= 8 -->
+<h1 style="margin-top:12px">8. Inference function</h1>
+<p><code>predict_podium(record, model='RF')</code> scores one driver in one race with the frozen models.</p>
+<ul>
+  <li><b>Input:</b> <code>grid_f</code> is required; every other feature may be missing.</li>
+  <li><b>Missing values</b> are handled exactly as in training: native NaN for the trees, training median + flag for
+  LR / NN.</li>
+  <li><b>Output:</b> the probability; the podium call at the frozen threshold; the missing features; a warning for gaps
+  never seen in training (20 of the 38 features are never missing there); out-of-range values; the top 3 SHAP
+  reasons.</li>
+</ul>
+<table>
+  <tr><th>Record</th><th class="num">LR</th><th class="num">RF</th><th class="num">GB</th><th class="num">NN</th><th>Actual / note</th></tr>
+  <tr><td>Complete: Norris, pole, 2024 Abu Dhabi GP</td><td class="num">0.690</td><td class="num">0.727</td><td class="num">0.744</td><td class="num">0.960</td><td>won the race; all four call a podium</td></tr>
+  <tr><td>Natural gaps: Doohan's debut, P17 (6 features missing)</td><td class="num">0.020</td><td class="num">0.007</td><td class="num">0.013</td><td class="num">0.000</td><td>finished P15; no warning (debut gaps are seen in training)</td></tr>
+  <tr><td>Norris without qualifying</td><td class="num">0.638</td><td class="num">0.617</td><td class="num">0.624</td><td class="num">0.904</td><td>warning: qualifying is never missing in training</td></tr>
+  <tr><td>… also without driver form and circuit history</td><td class="num">0.560</td><td class="num">0.577</td><td class="num">0.462</td><td class="num">0.978</td><td>degrades gradually; the NN is erratic</td></tr>
+  <tr><td>Grid slot only</td><td class="num">0.036</td><td class="num">0.166</td><td class="num">0.213</td><td class="num">0.439</td><td>warning: 19 never-seen gaps, so fall back to the grid rule</td></tr>
+</table>
+
+<!-- ======================================================================= 9 -->
+<h1 style="margin-top:12px">9. Known limitations</h1>
+<ul>
+  <li><b>Qualifying-coverage drift.</b> Before 1994 there is no qualifying data. The qualifying position is derived
+  from the grid, assuming grid = qualifying order. That assumption is verified only for 1994–2002 (98.2 % exact).
+  There are no lap times before 1994.</li>
+  <li><b>Era sensitivity.</b>
+    <ul>
+      <li>The base rate (about 3 / field size), reliability (39–49 % of entries finished before 2000, 80–86 % in the
+      2010s–20s) and field size all changed strongly over time.</li>
+      <li>The test seasons are a new rules era (2022 ground-effect cars).</li>
+      <li>Circuit history does not carry over into that era (§7.1).</li>
+      <li><code>season</code> and <code>team_starts</code> take values beyond the training range, which the trees cap.</li>
+      <li>The models lag mid-season swings in form (2024).</li>
+    </ul>
+  </li>
+  <li><b>Small evaluation sets.</b> Validation has 39 races, so many differences are within bootstrap noise, and the
+  tuned validation scores are optimistic. The per-circuit (Q1) and per-team (Q3) rates have wide CIs.</li>
+  <li><b>Picking three per race.</b> The models are not better than the grid at naming the three podium finishers;
+  their value is calibrated confidence across races.</li>
+  <li><b>Missing information.</b> There is no weather, tyre or practice-pace data, and retirements and safety cars
+  cannot be foreseen.</li>
+  <li><b>Source inconsistencies kept as recorded.</b> 100 races have repeated grid values (only 4 since 2000), there
+  are 11 race-time / gap mismatches, and one row has more laps than the winner.</li>
+  <li><b>Definitions.</b> Nationality is not the same as upbringing, and the status mapping records <i>what</i>
+  failed, not <i>why</i>. The strict-definition check shows that Q3 is robust to this.</li>
+</ul>
+<h1 style="margin-top:12px">10. Conclusion</h1>
+<p>Careful cleaning and leakage control, verified by a time-travel test, produced a pre-race table on which every
+model clearly beats the obvious grid rule at ranking podium contenders. The selected random forest reaches a test
+PR-AUC of 0.714 and F1 of 0.686.</p>
+<p>The gain comes from combining starting position with recent performance into well-calibrated probabilities, not
+from better picking of the three finishers. A simple logistic regression is statistically as good, which shows the
+signal is mostly additive.</p>
+<p>Home advantage is absent once the grid is controlled for. Front-row conversion rose in the hybrid era, and
+mechanical reliability improved markedly after 2022.</p>
+</section>
+
+<!-- ======================================================================= APPENDIX -->
+<section class="chapter appendix">
+<h1>Appendix A. All remaining figures</h1>
+<p class="muted">Every plot of the notebook appears either in the main text (Figures 1–22) or here. Section numbers
+refer to the notebook.</p>
+<div class="two">
+<figure><img src="../outputs/figures/s1_season_size_podium_rate.png"><figcaption><b>A1.</b> Races per season, field
+size and podium rate (§1.8.1).</figcaption></figure>
+<figure><img src="../outputs/figures/s1_presence_by_season.png"><figcaption><b>A2.</b> Share of rows with a value present
+per season, for key results and qualifying columns (§1.8.2).</figcaption></figure>
+<figure><img src="../outputs/figures/s1_grid_distribution_podium_rate.png"><figcaption><b>A3.</b> Grid distribution
+and podium rate by grid slot, including <code>grid = 0</code> (§1.8.3).</figcaption></figure>
+<figure><img src="../outputs/figures/s1_grid_vs_qualifying.png"><figcaption><b>A4.</b> Qualifying vs grid position,
+2003–24 (§1.8.4).</figcaption></figure>
+<figure><img src="../outputs/figures/s1_status_over_time.png"><figcaption><b>A5.</b> Race status over time:
+reliability and non-starters (§1.8.5).</figcaption></figure>
+<figure><img src="../outputs/figures/s1_indy500.png"><figcaption><b>A6.</b> The Indianapolis 500 in the
+championship, 1950–60 (§1.8.6).</figcaption></figure>
+<figure><img src="../outputs/figures/s1_results_correlation.png"><figcaption><b>A7.</b> Correlation of the numeric
+<code>results</code> columns (§1.8.8).</figcaption></figure>
+<figure><img src="../outputs/figures/s1_missing_by_column.png"><figcaption><b>A8.</b> Missing values by column, raw
+data (§1.4).</figcaption></figure>
+<figure><img src="../outputs/figures/s1_missingno_results_qualifying.png"><figcaption><b>A9.</b> Missingness pattern
+(missingno) in results and qualifying (§1.4).</figcaption></figure>
+<figure><img src="../outputs/figures/s1_duplicate_pairs_by_season.png"><figcaption><b>A10.</b> Duplicate
+(raceId, driverId) pairs by season: shared drives (§1.7).</figcaption></figure>
+<figure><img src="../outputs/figures/s2_qualifying_ratio_gap_to_pole.png"><figcaption><b>A11.</b> Qualifying lap
+ratio to the session best and gap to pole: the error threshold (§2.8).</figcaption></figure>
+<figure><img src="../outputs/figures/s2_grid_source_sprint.png"><figcaption><b>A12.</b> Sprint weekends 2021–24: does
+the Sunday grid follow the sprint result or qualifying? (§2.9)</figcaption></figure>
+<figure><img src="../outputs/figures/s2_team_lineages.png"><figcaption><b>A13.</b> Team lineages across constructor
+renames (§2.10).</figcaption></figure>
+<figure><img src="../outputs/figures/s2_status_groups_by_decade.png"><figcaption><b>A14.</b> How races ended, by
+decade, after cleaning (§2.13.3).</figcaption></figure>
+<figure><img src="../outputs/figures/s2_outliers_boxplots.png"><figcaption><b>A15.</b> IQR outlier check of the
+cleaned numeric columns; all values kept (§2.13.4).</figcaption></figure>
+<figure><img src="../outputs/figures/s4_feature_podium_rate.png"><figcaption><b>A16.</b> Podium rate by feature value
+for the main features (§4.6).</figcaption></figure>
+<figure><img src="../outputs/figures/s4_feature_correlation.png"><figcaption><b>A17.</b> Correlation between candidate
+features (§4.6).</figcaption></figure>
+<figure><img src="../outputs/figures/s4_feature_missingness.png"><figcaption><b>A18.</b> Feature missingness by season
+(§4.6).</figcaption></figure>
+<figure><img src="../outputs/figures/s4_pit_candidate.png"><figcaption><b>A19.</b> Pit-stop candidate feature: tested
+and rejected (§4.4).</figcaption></figure>
+<figure><img src="../outputs/figures/s5_recency_weighting.png"><figcaption><b>A20.</b> Recency-weighting experiment
+(§5.4).</figcaption></figure>
+<figure><img src="../outputs/figures/s6_tuning.png"><figcaption><b>A21.</b> Hyperparameter tuning on validation, all
+four models (§6.4).</figcaption></figure>
+<figure><img src="../outputs/figures/s6_threshold.png"><figcaption><b>A22.</b> Validation F1 vs threshold; the chosen
+thresholds are dotted (§6.6).</figcaption></figure>
+</div>
+<figure class="half"><img src="../outputs/figures/s7_shap_dependence.png"><figcaption><b>A23.</b> SHAP dependence of
+grid, team Elo, season and team starts; training vs test rows (§7.3).</figcaption></figure>
+</section>
+
+</body>
+</html>
